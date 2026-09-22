@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import PyPDF2
+import pdfplumber
 import io
 
 # ============ إعدادات الصفحة ============
@@ -134,14 +134,13 @@ uploaded = st.file_uploader("📎 ارفع ملف المناقصة (PDF)", type=
 
 if uploaded:
     with st.spinner("جاري قراءة الملف..."):
-        try:
-            reader = PyPDF2.PdfReader(io.BytesIO(uploaded.read()))
-            pages = len(reader.pages)
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        except Exception as e:
-            st.error(f"خطأ في قراءة الملف: {e}")
-            st.stop()
-
+    try:
+        with pdfplumber.open(io.BytesIO(uploaded.read())) as pdf:
+            pages = len(pdf.pages)
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    except Exception as e:
+        st.error(f"خطأ في قراءة الملف: {e}")
+        st.stop()
     if len(text.strip()) < 100:
         st.warning("⚠️ الملف يبدو صورة ممسوحة (Scanned). هذه النسخة تدعم PDF نصي فقط.")
     else:
