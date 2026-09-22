@@ -1,7 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
-import pdfplumber
 import io
+import os
+from pypdf import PdfReader
+from docx import Document
 
 # ============ إعدادات الصفحة ============
 st.set_page_config(
@@ -28,7 +30,7 @@ st.markdown("""
 st.markdown("""
 <div class="main-header">
     <h1>📋 Munaqasah AI</h1>
-    <p>محلل المناقصات الذكي — ارفع PDF واحصل على تقرير كامل في 90 ثانية</p>
+    <p>محلل المناقصات الذكي — ارفع PDF أو Word واحصل على تقرير كامل</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -108,23 +110,95 @@ F. امسح بحثًا عن: مواعيد حرجة (زيارة موقع، آخر
 - الخطوة التالية
 """
 
+# ============ دالة استخراج النص ============
+def extract_text_from_file(uploaded_file):
+    """
+    تستخرج النص من PDF أو DOCX.
+    إذا كان PDF ممسوحًا ضوئيًا، ترجع None ليتم رفعه مباشرة لـ Gemini.
+    """
+    filename = uploaded_file.name.lower()
+    file_bytes = uploaded_file.read()
+
+    # --- PDF ---
+    if filename.endswith(".pdf"):
+        try:
+            reader = PdfReader(io.BytesIO(file_bytes))
+            text_parts = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    text_parts.append(t)
+            text = "\n".join(text_parts)
+            # إذا كان النص قليلًا جدًا، فهو ممسوح ضوئيًا
+            if len(text.strip()) < 100:
+                return None, file_bytes, "application/pdf"
+            return text, None, None
+        except Exception as e:
+            st.error(f"خطأ في قراءة PDF: {e}")
+            return None, None, None
+
+    # --- DOCX ---
+    elif filename.endswith(".docx"):
+        try:
+            doc = Document(io.BytesIO(file_bytes))
+            text_parts = []
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    text_parts.append(para.text)
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    text_parts.append(" | ".join(cells))
+            return "\n".join(text_parts), None, None
+        except Exception as e:
+            st.error(f"خطأ في قراءة Word: {e}")
+            return None, None, None
+
+    # --- TXT ---
+    elif filename.endswith(".txt") or filename.endswith(".md"):
+        return file_bytes.decode("utf-8", errors="ignore"), None, None
+
+    else:
+        st.error("صيغة الملف غير مدعومة. الرجاء رفع PDF، DOCX، TXT، أو MD.")
+        return None, None, None
+
+
 # ============ رفع الملف ============
-uploaded = st.file_uploader("📎 ارفع ملف المناقصة (PDF)", type=["pdf"])
+uploaded = st.file_uploader(
+    "📎 ارفع ملف المناقصة",
+    type=["pdf", "docx", "txt", "md"]
+)
 
 if uploaded:
     with st.spinner("جاري قراءة الملف..."):
-        try:
-            with pdfplumber.open(io.BytesIO(uploaded.read())) as pdf:
-                pages = len(pdf.pages)
-                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-        except Exception as e:
-            st.error(f"خطأ في قراءة الملف: {e}")
-            st.stop()
+        text, file_bytes, mime_type = extract_text_from_file(uploaded)
 
-    if len(text.strip()) < 100:
-        st.warning("⚠️ الملف يبدو صورة ممسوحة (Scanned). هذه النسخة تدعم PDF نصي فقط.")
-    else:
-        st.success(f"✅ تم استخراج {len(text):,} حرف من {pages} صفحة")
+    # ---------- حالة 1: ملف ممسوح ضوئيًا أو صورة ----------
+    if file_bytes is not None:
+        st.info("🔍 تم اكتشاف ملف ممسوح ضوئيًا — سيتم استخدام الرؤية الاصطناعية من Gemini (OCR).")
+        if st.button("🚀 تحليل المناقصة (OCR)", type="primary", use_container_width=True):
+            with st.spinner("يحلل بواسطة Gemini (رؤية + OCR)... قد يستغرق 90-120 ثانية"):
+                try:
+                    model = genai.GenerativeModel(MODEL_NAME)
+                    response = model.generate_content([
+                        MASTER_PROMPT,
+                        {"mime_type": mime_type, "data": file_bytes}
+                    ])
+                    st.markdown("---")
+                    st.markdown(response.text)
+                    st.download_button(
+                        "📥 تحميل التقرير",
+                        response.text,
+                        file_name="تقرير_المناقصة.md",
+                        mime="text/markdown",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"خطأ في التحليل: {e}")
+
+    # ---------- حالة 2: ملف نصي (PDF/DOCX/TXT) ----------
+    elif text is not None:
+        st.success(f"✅ تم استخراج {len(text):,} حرف")
         st.caption(f"حجم النص: ~{len(text)//4:,} رمز (Token)")
 
         if st.button("🚀 تحليل المناقصة", type="primary", use_container_width=True):
@@ -135,7 +209,7 @@ if uploaded:
                     st.markdown("---")
                     st.markdown(response.text)
                     st.download_button(
-                        "📥 تحميل التقرير (Markdown)",
+                        "📥 تحميل التقرير",
                         response.text,
                         file_name="تقرير_المناقصة.md",
                         mime="text/markdown",
@@ -146,4 +220,4 @@ if uploaded:
 
 # ============ تذييل ============
 st.markdown("---")
-st.caption("Munaqasah AI v1.0 — محلل مناقصات ذكي للقطاع الإنشائي العربي")
+st.caption("Munaqasah AI v2.0 — محلل مناقصات ذكي للقطاع الإنشائي العربي")
