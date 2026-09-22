@@ -1,7 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 import io
-import os
 from pypdf import PdfReader
 from docx import Document
 
@@ -34,9 +33,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ============ إعداد Gemini ============
+# ============ إعداد Gemini (الطريقة الجديدة) ============
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception:
     st.error("⚠️ مفتاح API غير معد. أضف GEMINI_API_KEY في الإعدادات.")
     st.stop()
@@ -112,14 +111,9 @@ F. امسح بحثًا عن: مواعيد حرجة (زيارة موقع، آخر
 
 # ============ دالة استخراج النص ============
 def extract_text_from_file(uploaded_file):
-    """
-    تستخرج النص من PDF أو DOCX.
-    إذا كان PDF ممسوحًا ضوئيًا، ترجع None ليتم رفعه مباشرة لـ Gemini.
-    """
     filename = uploaded_file.name.lower()
     file_bytes = uploaded_file.read()
 
-    # --- PDF ---
     if filename.endswith(".pdf"):
         try:
             reader = PdfReader(io.BytesIO(file_bytes))
@@ -129,7 +123,6 @@ def extract_text_from_file(uploaded_file):
                 if t:
                     text_parts.append(t)
             text = "\n".join(text_parts)
-            # إذا كان النص قليلًا جدًا، فهو ممسوح ضوئيًا
             if len(text.strip()) < 100:
                 return None, file_bytes, "application/pdf"
             return text, None, None
@@ -137,7 +130,6 @@ def extract_text_from_file(uploaded_file):
             st.error(f"خطأ في قراءة PDF: {e}")
             return None, None, None
 
-    # --- DOCX ---
     elif filename.endswith(".docx"):
         try:
             doc = Document(io.BytesIO(file_bytes))
@@ -154,7 +146,6 @@ def extract_text_from_file(uploaded_file):
             st.error(f"خطأ في قراءة Word: {e}")
             return None, None, None
 
-    # --- TXT ---
     elif filename.endswith(".txt") or filename.endswith(".md"):
         return file_bytes.decode("utf-8", errors="ignore"), None, None
 
@@ -173,30 +164,27 @@ if uploaded:
     with st.spinner("جاري قراءة الملف..."):
         text, file_bytes, mime_type = extract_text_from_file(uploaded)
 
-    # ---------- حالة 1: ملف ممسوح ضوئيًا أو صورة ----------
+    # ---------- حالة 1: ملف ممسوح ضوئيًا ----------
     if file_bytes is not None:
-        st.info("🔍 تم اكتشاف ملف ممسوح ضوئيًا — سيتم استخدام الرؤية الاصطناعية من Gemini (OCR).")
+        st.info("🔍 تم اكتشاف ملف ممسوح ضوئيًا — سيتم استخدام الرؤية الاصطناعية (OCR).")
         if st.button("🚀 تحليل المناقصة (OCR)", type="primary", use_container_width=True):
             with st.spinner("يحلل بواسطة Gemini (رؤية + OCR)... قد يستغرق 90-120 ثانية"):
                 try:
-                    model = genai.GenerativeModel(MODEL_NAME)
-                    response = model.generate_content([
-                        MASTER_PROMPT,
-                        {"mime_type": mime_type, "data": file_bytes}
-                    ])
+                    from google.genai import types
+                    response = client.models.generate_content(
+                        model=MODEL_NAME,
+                        contents=[
+                            types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+                            MASTER_PROMPT
+                        ]
+                    )
                     st.markdown("---")
                     st.markdown(response.text)
-                    st.download_button(
-                        "📥 تحميل التقرير",
-                        response.text,
-                        file_name="تقرير_المناقصة.md",
-                        mime="text/markdown",
-                        use_container_width=True
-                    )
+                    st.download_button("📥 تحميل التقرير", response.text, file_name="تقرير_المناقصة.md", mime="text/markdown", use_container_width=True)
                 except Exception as e:
                     st.error(f"خطأ في التحليل: {e}")
 
-    # ---------- حالة 2: ملف نصي (PDF/DOCX/TXT) ----------
+    # ---------- حالة 2: ملف نصي ----------
     elif text is not None:
         st.success(f"✅ تم استخراج {len(text):,} حرف")
         st.caption(f"حجم النص: ~{len(text)//4:,} رمز (Token)")
@@ -204,20 +192,16 @@ if uploaded:
         if st.button("🚀 تحليل المناقصة", type="primary", use_container_width=True):
             with st.spinner("يحلل بواسطة Gemini... قد يستغرق 60-90 ثانية"):
                 try:
-                    model = genai.GenerativeModel(MODEL_NAME)
-                    response = model.generate_content([MASTER_PROMPT, text])
+                    response = client.models.generate_content(
+                        model=MODEL_NAME,
+                        contents=[MASTER_PROMPT, text]
+                    )
                     st.markdown("---")
                     st.markdown(response.text)
-                    st.download_button(
-                        "📥 تحميل التقرير",
-                        response.text,
-                        file_name="تقرير_المناقصة.md",
-                        mime="text/markdown",
-                        use_container_width=True
-                    )
+                    st.download_button("📥 تحميل التقرير", response.text, file_name="تقرير_المناقصة.md", mime="text/markdown", use_container_width=True)
                 except Exception as e:
                     st.error(f"خطأ في التحليل: {e}")
 
 # ============ تذييل ============
 st.markdown("---")
-st.caption("Munaqasah AI v2.0 — محلل مناقصات ذكي للقطاع الإنشائي العربي")
+st.caption("Munaqasah AI v2.1 — محلل مناقصات ذكي للقطاع الإنشائي العربي")
