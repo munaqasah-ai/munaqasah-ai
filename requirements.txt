@@ -1,3 +1,4 @@
 streamlit
 google-generativeai
-pdfplumder
+pypdf
+python-docx
