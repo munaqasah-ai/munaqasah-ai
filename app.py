@@ -1,11 +1,9 @@
 import streamlit as st
 import requests
 import io
-import json
 from pypdf import PdfReader
 from docx import Document
 
-# ============ إعدادات الصفحة ============
 st.set_page_config(
     page_title="Munaqasah AI - محلل المناقصات",
     page_icon="📋",
@@ -34,17 +32,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ============ إعداد OpenRouter ============
 try:
     OPENROUTER_KEY = st.secrets["OPENROUTER_API_KEY"]
 except Exception:
-    st.error("⚠️ مفتاح OpenRouter غير معد. أضف OPENROUTER_API_KEY في الإعدادات.")
+    st.error("مفتاح OpenRouter غير معد. أضف OPENROUTER_API_KEY في الإعدادات.")
     st.stop()
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_NAME = "google/gemini-2.0-flash-exp:free"
 
-# ============ الـ Prompt الرئيسي v3.0 ============
 MASTER_PROMPT = """
 أنت محلّل مناقصات خبير في قطاع الإنشاءات والمقاولات العربية، بخبرة 20 سنة. تعمل كمستشار للمقاول، لا كطرف محايد. هدفك: حماية المقاول من الخسارة وتمكينه من قرار ربح.
 
@@ -68,12 +64,12 @@ F. امسح بحثًا عن: مواعيد حرجة (زيارة موقع، آخر
 
 ## 1. الملخص التنفيذي (صفحة واحدة)
 - الجهة، المشروع، الموقع
-- 🔢 عدد الوحدات / المراحل / المكونات
-- 📅 المواعيد الحرجة (زيارة إلزامية، آخر موعد) — في أول سطر
-- 💰 الميزانية، المدة، الضمان
-- ⚖️ آلية التقييم (نسبة فني/مالي إن وجدت)
-- 🎯 القرار: [تقدّم / لا تتقدم / تحتاج مراجعة]
-- 💡 السبب في سطر واحد
+- عدد الوحدات / المراحل / المكونات
+- المواعيد الحرجة (زيارة إلزامية، آخر موعد) — في أول سطر
+- الميزانية، المدة، الضمان
+- آلية التقييم (نسبة فني/مالي إن وجدت)
+- القرار: [تقدّم / لا تتقدم / تحتاج مراجعة]
+- السبب في سطر واحد
 
 ## 2. الشروط المالية + التقدير السوقي
 لكل بند: النص الأصلي + التقدير المعتاد + مستوى الخطورة
@@ -81,7 +77,7 @@ F. امسح بحثًا عن: مواعيد حرجة (زيارة موقع، آخر
 ## 3. تحليل التدفق النقدي (Cash Flow Analysis)
 - الدفعة المقدمة، المستخلصات، فترة الانتظار
 - رأس المال العامل المطلوب
-- 🚨 تصنيف: [مريح / ضاغط / قاتل]
+- تصنيف: [مريح / ضاغط / قاتل]
 
 ## 4. المخاطر التعاقدية (جدول)
 | المخاطرة | الشدة | الاقتباس الحرفي | الصفحة | التوصية الفورية |
@@ -92,11 +88,11 @@ F. امسح بحثًا عن: مواعيد حرجة (زيارة موقع، آخر
 ## 6. المتطلبات الفنية (Checklist)
 
 ## 7. تحليل الفجوات (Gap Analysis)
-كل فجوة → الحل + التكلفة + الوقت
+كل فجوة: الحل + التكلفة + الوقت
 
 ## 8. التحليل التجاري
 - النطاق السعري، هامش الربح، التكاليف الخفية
-- 🔢 رقم التسعير الموصى به
+- رقم التسعير الموصى به
 
 ## 9. تحليل المنافسة
 
@@ -111,7 +107,6 @@ F. امسح بحثًا عن: مواعيد حرجة (زيارة موقع، آخر
 - الخطوة التالية
 """
 
-# ============ دالة استخراج النص ============
 def extract_text_from_file(uploaded_file):
     filename = uploaded_file.name.lower()
     file_bytes = uploaded_file.read()
@@ -153,7 +148,6 @@ def extract_text_from_file(uploaded_file):
         return None
 
 
-# ============ دالة الاتصال بـ OpenRouter ============
 def analyze_with_openrouter(text):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
@@ -177,8 +171,7 @@ def analyze_with_openrouter(text):
     return data["choices"][0]["message"]["content"]
 
 
-# ============ رفع الملف ============
-uploaded = st.file_uploader("📎 ارفع ملف المناقصة", type=["pdf", "docx", "txt", "md"])
+uploaded = st.file_uploader("ارفع ملف المناقصة", type=["pdf", "docx", "txt", "md"])
 
 if uploaded:
     with st.spinner("جاري قراءة الملف..."):
@@ -188,19 +181,19 @@ if uploaded:
         st.stop()
 
     if len(text.strip()) < 100:
-        st.warning("⚠️ الملف يبدو فارغًا أو ممسوحًا ضوئيًا. النسخة الحالية تدعم PDF النصي فقط.")
+        st.warning("الملف يبدو فارغًا أو ممسوحًا ضوئيًا. النسخة الحالية تدعم PDF النصي فقط.")
     else:
-        st.success(f"✅ تم استخراج {len(text):,} حرف")
+        st.success(f"تم استخراج {len(text):,} حرف")
         st.caption(f"حجم النص: ~{len(text)//4:,} رمز (Token)")
 
-        if st.button("🚀 تحليل المناقصة", type="primary", use_container_width=True):
+        if st.button("تحليل المناقصة", type="primary", use_container_width=True):
             with st.spinner("يحلل بواسطة Gemini عبر OpenRouter... قد يستغرق 60-120 ثانية"):
                 try:
                     report = analyze_with_openrouter(text)
                     st.markdown("---")
                     st.markdown(report)
                     st.download_button(
-                        "📥 تحميل التقرير (Markdown)",
+                        "تحميل التقرير (Markdown)",
                         report,
                         file_name="تقرير_المناقصة.md",
                         mime="text/markdown",
@@ -209,96 +202,8 @@ if uploaded:
                 except Exception as e:
                     st.error(f"خطأ في التحليل: {e}")
 
-# ============ تذييل ============
 st.markdown("---")
-st.caption("Munaqasah AI v2.2 — محلل مناقصات ذكي للقطاع الإنشائي العربي")>المخاطرة</th><th>الشدة</th><th>الاقتباس</th><th>الصفحة</th><th>التوصية</th></tr>
-<tr><td>غياب شروط واضحة</td><td>عالية</td><td>غير مذكور</td><td>غير مذكور</td><td>إرسال طلب توضيح رسمي.</td></tr>
-</table>
-<h2>5. كاشف التضاربات</h2>
-<p>لم يتم اكتشاف تضاربات في وضع العرض التجريبي.</p>
-<h2>6. المتطلبات الفنية</h2>
-<ul>
-<li>مراجعة نطاق الأعمال.</li>
-<li>التحقق من المواصفات والمخططات.</li>
-<li>تأكيد متطلبات الخبرة والكوادر.</li>
-</ul>
-<h2>7. تحليل الفجوات</h2>
-<p>يلزم توفير الوثيقة وتحليل محتواها لتحديد الفجوات والتكلفة والوقت.</p>
-<h2>8. التحليل التجاري</h2>
-<p>لا يمكن تحديد النطاق السعري أو رقم التسعير الموصى به دون بيانات الكميات والتكاليف.</p>
-<h2>9. تحليل المنافسة</h2>
-<p>غير مذكور — التقدير السوقي المعتاد: يلزم تحليل السوق والمنافسين.</p>
-<h2>10. البنود التي ترفع التكلفة</h2>
-<ul>
-<li>تأخر الدفعات.</li>
-<li>تغير نطاق الأعمال.</li>
-<li>غموض المواصفات.</li>
-</ul>
-<h2>11. استفسارات RFI جاهزة للإرسال</h2>
-<p><strong>العربية:</strong> يرجى تزويدنا بجدول الدفعات، مدة اعتماد المستخلصات، وآلية معالجة أوامر التغيير.</p>
-<p><strong>English:</strong> Please provide the payment schedule, certification period, and change-order procedure.</p>
-<h2>12. القرار النهائي</h2>
-<ol>
-<li>لا يمكن اتخاذ قرار نهائي دون تحليل الملف الفعلي.</li>
-<li>يجب التحقق من الشروط المالية والمواعيد الحرجة.</li>
-<li>يجب طلب التوضيحات قبل التسعير.</li>
-</ol>
-<p><strong>خطة 7 أيام:</strong></p>
-<ul>
-<li>اليوم 1: مراجعة الوثائق.</li>
-<li>اليومان 2 و3: استخراج الكميات والمتطلبات.</li>
-<li>اليومان 4 و5: مراجعة المخاطر والتسعير.</li>
-<li>اليومان 6 و7: تجهيز الاستفسارات والقرار النهائي.</li>
-</ul>
-`;
-}
-function displayReport(report, isDemo) {
-reportSection.style.display = "block";
-reportContent.innerHTML = `${isDemo ? "" : '<span class="badge safe-badge">تحليل حقيقي</span>'}${report}`;
-reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-document.getElementById("copyBtn").addEventListener("click", async () => {
-const text = reportContent.innerText;
-await navigator.clipboard.writeText(text);
-showStatus("تم نسخ التقرير.");
-});
-document.getElementById("downloadBtn").addEventListener("click", () => {
-const text = reportContent.innerText;
-const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
-const url = URL.createObjectURL(blob);
-const link = document.createElement("a");
-link.href = url;
-link.download = "تقرير_المناقصة.md";
-link.click();
-URL.revokeObjectURL(url);
-});
-resetBtn.addEventListener("click", () => {
-if (!confirm("هل تريد حذف الملف والتقرير الحالي؟")) return;
-selectedFile = null; extractedText = ""; currentReport = "";
-fileInput.value = "";
-fileInfo.style.display = "none";
-summary.style.display = "none";
-reportSection.style.display = "none";
-statusBox.style.display = "none";
-errorBox.style.display = "none";
-analyzeBtn.disabled = true;
-});
-function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-function escapeHtml(value) {
-return value
-.replaceAll("&", "&amp;")
-.replaceAll("<", "&lt;")
-.replaceAll(">", "&gt;")
-.replaceAll('"', "&quot;")
-.replaceAll("'", "&#039;");
-}
-</script>
-</body>
-</html>);
-
-      if (!selectedFile) {
-        showError("اختر ملفًا أولًا قبل بدء التحليل.");
-        return;
+st.caption("Munaqasah AI v2.2 — محلل مناقصات ذكي للقطاع الإنشائي العربي")  return;
       }
 
       analyzeBtn.disabled = true;
