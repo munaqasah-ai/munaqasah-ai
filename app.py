@@ -203,4 +203,3 @@ if uploaded:
                     st.error(f"خطأ في التحليل: {e}")
 
 st.markdown("---")
-st.caption("Munaqasah AI v2.2 — محلل مناقصات ذكي للقطاع الإنشائي العربي")
