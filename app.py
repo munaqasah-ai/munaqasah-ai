@@ -39,7 +39,7 @@ except Exception:
     st.stop()
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL_NAME = "google/gemini-2.0-flash-exp:free"
+MODEL_NAME = "openrouter/free"
 
 MASTER_PROMPT = """
 أنت محلّل مناقصات خبير في قطاع الإنشاءات والمقاولات العربية، بخبرة 20 سنة. تعمل كمستشار للمقاول، لا كطرف محايد. هدفك: حماية المقاول من الخسارة وتمكينه من قرار ربح.
